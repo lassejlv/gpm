@@ -29,6 +29,8 @@ func main() {
 		handleUninstall()
 	case "cache":
 		handleCache()
+	case "bin":
+		handleBin()
 	case "help", "-h", "--help":
 		printUsage()
 	default:
@@ -75,11 +77,11 @@ func handleInstall() {
 		os.Exit(1)
 	}
 
-	for _, pkg := range packages {
-		if err := installPackage(pm, pkg, isDev, true, true, lockFile, timer); err != nil {
-			color.Red("Failed to install %s: %v", pkg, err)
-			os.Exit(1)
-		}
+	// Use parallel installer for multiple packages
+	parallelInstaller := NewParallelInstaller(pm, lockFile, timer)
+	if err := parallelInstaller.InstallFromSpecs(packages, isDev, true); err != nil {
+		color.Red("Failed to install packages: %v", err)
+		os.Exit(1)
 	}
 
 	elapsed := timer.Stop()
@@ -116,6 +118,26 @@ func handleUninstall() {
 	}
 
 	fmt.Printf(" %s Uninstalled %d package(s)\n", color.HiGreenString("✓"), len(packages))
+}
+
+func handleBin() {
+	bm := NewBinaryManager()
+	binaries, err := bm.listBinaries()
+	if err != nil {
+		color.Red("Failed to list binaries: %v", err)
+		os.Exit(1)
+	}
+
+	if len(binaries) == 0 {
+		fmt.Printf("\n %s No binaries found\n", color.HiBlackString("ℹ"))
+		return
+	}
+
+	fmt.Printf("\n %s Available binaries (%d)\n", color.CyanString("🔧"), len(binaries))
+	for _, binary := range binaries {
+		fmt.Printf("   %s\n", color.CyanString(binary))
+	}
+	fmt.Println()
 }
 
 func handleCache() {
@@ -220,6 +242,7 @@ func printUsage() {
 	fmt.Println("  gpm i <package>              Install a package (short)")
 	fmt.Println("  gpm install <pkg> --save-dev Install as dev dependency")
 	fmt.Println("  gpm uninstall <package>      Uninstall a package")
+	fmt.Println("  gpm bin                      List available binaries")
 	fmt.Println("  gpm cache <command>          Cache management")
 	fmt.Println("  gpm help                     Show this help message")
 	fmt.Println("\nExamples:")
@@ -228,6 +251,7 @@ func printUsage() {
 	fmt.Printf("  gpm i express react          %s Install multiple packages\n", color.CyanString("↓"))
 	fmt.Printf("  gpm install typescript --save-dev  %s Install as dev dependency\n", color.CyanString("↓"))
 	fmt.Printf("  gpm uninstall lodash         %s Remove lodash\n", color.RedString("✗"))
+	fmt.Printf("  gpm bin                      %s List available binaries\n", color.CyanString("🔧"))
 	fmt.Printf("  gpm cache info               %s Show cache info\n", color.CyanString("ℹ"))
 	fmt.Println("\nNote: Requires package.json in current directory\n")
 }

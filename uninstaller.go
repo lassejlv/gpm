@@ -20,6 +20,12 @@ func uninstallPackage(packageName string, lockFile *LockFile) error {
 
 	fmt.Printf(" %s Removing %s...\n", color.RedString("✗"), color.CyanString(packageName))
 
+	// Remove binaries first
+	bm := NewBinaryManager()
+	if err := bm.removePackageBinaries(packageName); err != nil {
+		fmt.Printf(" %s Failed to remove binaries for %s: %v\n", color.YellowString("⚠"), packageName, err)
+	}
+
 	if err := os.RemoveAll(packagePath); err != nil {
 		return fmt.Errorf("failed to remove package directory: %v", err)
 	}

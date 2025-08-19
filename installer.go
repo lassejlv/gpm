@@ -91,6 +91,12 @@ func installPackage(pm *PackageManager, packageSpec string, isDev bool, writeToP
 		color.HiBlackString(installedVersion),
 		color.GreenString("added"))
 
+	// Setup binaries for the package
+	bm := NewBinaryManager()
+	if err := bm.setupPackageBinaries(name); err != nil {
+		fmt.Printf(" %s Failed to setup binaries for %s: %v\n", color.YellowString("⚠"), name, err)
+	}
+
 	return nil
 }
 
@@ -113,8 +119,9 @@ func installFromPackageJSON(pm *PackageManager, lockFile *LockFile) error {
 		return nil
 	}
 
-	fmt.Printf("\n %s Installing %d packages\n", color.CyanString("⚡"), totalPackages)
+	var jobs []PackageJob
 
+	// Prepare regular dependencies
 	for name, version := range pkg.Dependencies {
 		packageSpec := name
 		if version != "" && version != "latest" {
@@ -124,12 +131,21 @@ func installFromPackageJSON(pm *PackageManager, lockFile *LockFile) error {
 			}
 		}
 
-		if err := installPackage(pm, packageSpec, false, false, true, lockFile, timer); err != nil {
-			fmt.Printf(" %s Failed to install %s: %v\n", color.RedString("✗"), color.CyanString(name), err)
-			return err
+		parsedName, parsedVersion := parsePackageSpec(packageSpec)
+		originalSpec := packageSpec
+		if parsedVersion == "latest" {
+			originalSpec = parsedName
 		}
+
+		jobs = append(jobs, PackageJob{
+			Name:         parsedName,
+			Version:      parsedVersion,
+			IsDev:        false,
+			OriginalSpec: originalSpec,
+		})
 	}
 
+	// Prepare dev dependencies
 	for name, version := range pkg.DevDependencies {
 		packageSpec := name
 		if version != "" && version != "latest" {
@@ -139,10 +155,24 @@ func installFromPackageJSON(pm *PackageManager, lockFile *LockFile) error {
 			}
 		}
 
-		if err := installPackage(pm, packageSpec, true, false, true, lockFile, timer); err != nil {
-			fmt.Printf(" %s Failed to install dev dependency %s: %v\n", color.RedString("✗"), color.CyanString(name), err)
-			return err
+		parsedName, parsedVersion := parsePackageSpec(packageSpec)
+		originalSpec := packageSpec
+		if parsedVersion == "latest" {
+			originalSpec = parsedName
 		}
+
+		jobs = append(jobs, PackageJob{
+			Name:         parsedName,
+			Version:      parsedVersion,
+			IsDev:        true,
+			OriginalSpec: originalSpec,
+		})
+	}
+
+	// Install packages in parallel
+	parallelInstaller := NewParallelInstaller(pm, lockFile, timer)
+	if err := parallelInstaller.InstallPackages(jobs, false); err != nil {
+		return err
 	}
 
 	if err := lockFile.saveLockFile(); err != nil {
@@ -150,10 +180,9 @@ func installFromPackageJSON(pm *PackageManager, lockFile *LockFile) error {
 	}
 
 	elapsed := timer.Stop()
-	fmt.Printf("\n %s All packages installed successfully! %s %s\n",
+	fmt.Printf("\n %s Done in %s\n",
 		color.HiGreenString("✓"),
-		color.HiGreenString("🎉"),
-		color.HiBlackString(fmt.Sprintf("(%s)", formatDuration(elapsed))))
+		color.HiBlackString(formatDuration(elapsed)))
 	return nil
 }
 
