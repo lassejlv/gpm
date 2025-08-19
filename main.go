@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -27,6 +28,8 @@ func main() {
 		handleInstall()
 	case "uninstall", "remove", "rm":
 		handleUninstall()
+	case "upgrade", "update":
+		handleUpgrade()
 	case "cache":
 		handleCache()
 	case "bin":
@@ -118,6 +121,123 @@ func handleUninstall() {
 	}
 
 	fmt.Printf(" %s Uninstalled %d package(s)\n", color.HiGreenString("✓"), len(packages))
+}
+
+func handleUpgrade() {
+	if !fileExists("package.json") {
+		color.Red("Error: package.json not found in current directory")
+		os.Exit(1)
+	}
+
+	lockFile, err := loadLockFile()
+	if err != nil {
+		color.Red("Failed to load lockfile: %v", err)
+		os.Exit(1)
+	}
+
+	pm := NewPackageManager()
+	upgradeManager := NewUpgradeManager(pm, lockFile)
+
+	// Check for --all flag
+	skipTUI := false
+	var packagesToUpgrade []string
+
+	if len(os.Args) > 2 {
+		for _, arg := range os.Args[2:] {
+			if arg == "--all" || arg == "-a" {
+				skipTUI = true
+			} else {
+				packagesToUpgrade = append(packagesToUpgrade, arg)
+			}
+		}
+	}
+
+	if len(packagesToUpgrade) == 0 && !skipTUI {
+		// Upgrade all packages from package.json
+		data, err := os.ReadFile("package.json")
+		if err != nil {
+			color.Red("Failed to read package.json: %v", err)
+			os.Exit(1)
+		}
+
+		var pkg PackageJSON
+		if err := json.Unmarshal(data, &pkg); err != nil {
+			color.Red("Failed to parse package.json: %v", err)
+			os.Exit(1)
+		}
+
+		for name := range pkg.Dependencies {
+			packagesToUpgrade = append(packagesToUpgrade, name)
+		}
+		for name := range pkg.DevDependencies {
+			packagesToUpgrade = append(packagesToUpgrade, name)
+		}
+	}
+
+	if len(packagesToUpgrade) == 0 {
+		fmt.Printf(" %s No packages to upgrade\n", color.YellowString("⚠"))
+		return
+	}
+
+	// Check what needs upgrading
+	upgrades, err := upgradeManager.CheckUpgrades(packagesToUpgrade)
+	if err != nil {
+		color.Red("Failed to check for upgrades: %v", err)
+		os.Exit(1)
+	}
+
+	var packagesNeedingUpgrade []string
+
+	if skipTUI {
+		// Skip TUI and upgrade all packages that need upgrading
+		for _, upgrade := range upgrades {
+			if upgrade.NeedsUpgrade {
+				packagesNeedingUpgrade = append(packagesNeedingUpgrade, upgrade.Name)
+			}
+		}
+
+		if len(packagesNeedingUpgrade) == 0 {
+			fmt.Printf(" %s All packages are up to date\n", color.GreenString("✓"))
+			return
+		}
+
+		fmt.Printf(" %s Upgrading %d package(s)...\n", color.YellowString("⬆"), len(packagesNeedingUpgrade))
+	} else {
+		// Use TUI to select packages to upgrade
+		tui := NewTUI()
+		selectedUpgrades, err := tui.SelectPackagesToUpgrade(upgrades)
+		if err != nil {
+			color.Red("Failed to select packages: %v", err)
+			os.Exit(1)
+		}
+
+		if len(selectedUpgrades) == 0 {
+			return
+		}
+
+		// Extract package names from selected upgrades
+		for _, upgrade := range selectedUpgrades {
+			packagesNeedingUpgrade = append(packagesNeedingUpgrade, upgrade.Name)
+		}
+	}
+
+	timer := NewTimer()
+	timer.Start()
+
+	// Use parallel installer for upgrades
+	parallelInstaller := NewParallelInstaller(pm, lockFile, timer)
+	if err := parallelInstaller.InstallFromSpecs(packagesNeedingUpgrade, false, true); err != nil {
+		color.Red("Failed to upgrade packages: %v", err)
+		os.Exit(1)
+	}
+
+	elapsed := timer.Stop()
+
+	if err := lockFile.saveLockFile(); err != nil {
+		fmt.Printf(" %s Failed to save lockfile: %v\n", color.YellowString("⚠"), err)
+	}
+
+	fmt.Printf(" %s Upgraded %d package(s) in %s\n", color.HiGreenString("✓"), len(packagesNeedingUpgrade), color.HiBlackString(formatDuration(elapsed)))
 }
 
 func handleBin() {
@@ -242,6 +362,8 @@ func printUsage() {
 	fmt.Println("  gpm i <package>              Install a package (short)")
 	fmt.Println("  gpm install <pkg> --save-dev Install as dev dependency")
 	fmt.Println("  gpm uninstall <package>      Uninstall a package")
+	fmt.Println("  gpm upgrade [package]        Upgrade packages to latest")
+	fmt.Println("  gpm upgrade --all            Upgrade all packages without prompt")
 	fmt.Println("  gpm bin                      List available binaries")
 	fmt.Println("  gpm cache <command>          Cache management")
 	fmt.Println("  gpm help                     Show this help message")
@@ -251,6 +373,8 @@ func printUsage() {
 	fmt.Printf("  gpm i express react          %s Install multiple packages\n", color.CyanString("↓"))
 	fmt.Printf("  gpm install typescript --save-dev  %s Install as dev dependency\n", color.CyanString("↓"))
 	fmt.Printf("  gpm uninstall lodash         %s Remove lodash\n", color.RedString("✗"))
+	fmt.Printf("  gpm upgrade                  %s Upgrade packages (interactive)\n", color.BlueString("⬆"))
+	fmt.Printf("  gpm upgrade --all            %s Upgrade all packages\n", color.BlueString("⬆"))
 	fmt.Printf("  gpm bin                      %s List available binaries\n", color.CyanString("🔧"))
 	fmt.Printf("  gpm cache info               %s Show cache info\n", color.CyanString("ℹ"))
 	fmt.Println("\nNote: Requires package.json in current directory\n")

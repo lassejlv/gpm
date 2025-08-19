@@ -179,6 +179,12 @@ func installFromPackageJSON(pm *PackageManager, lockFile *LockFile) error {
 		fmt.Printf(" %s Failed to save lockfile: %v\n", color.YellowString("⚠"), err)
 	}
 
+	// Setup binaries for all packages after installation
+	bm := NewBinaryManager()
+	if err := bm.setupAllBinaries(); err != nil {
+		fmt.Printf(" %s Failed to setup some binaries: %v\n", color.YellowString("⚠"), err)
+	}
+
 	elapsed := timer.Stop()
 	fmt.Printf("\n %s Done in %s\n",
 		color.HiGreenString("✓"),

@@ -111,12 +111,10 @@ func (pi *ParallelInstaller) showProgress(total int, results <-chan PackageResul
 						color.HiGreenString("✓"), completed)
 				}
 
-				// Setup binaries for all installed packages
+				// Setup binaries for all packages in node_modules after installation
 				bm := NewBinaryManager()
-				for _, packageName := range installedPackages {
-					if err := bm.setupPackageBinaries(packageName); err != nil {
-						// Silent fail for binary setup
-					}
+				if err := bm.setupAllBinaries(); err != nil {
+					fmt.Printf(" %s Failed to setup some binaries: %v\n", color.YellowString("⚠"), err)
 				}
 
 				// Show cache/download statistics

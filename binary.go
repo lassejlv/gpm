@@ -247,3 +247,49 @@ func (bm *BinaryManager) listBinaries() ([]string, error) {
 
 	return binaries, nil
 }
+
+func (bm *BinaryManager) setupAllBinaries() error {
+	if !fileExists(bm.nodeModulesPath) {
+		return nil
+	}
+
+	entries, err := os.ReadDir(bm.nodeModulesPath)
+	if err != nil {
+		return err
+	}
+
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+
+		packageName := entry.Name()
+		if packageName == ".bin" {
+			continue
+		}
+
+		// Handle scoped packages
+		if strings.HasPrefix(packageName, "@") {
+			scopePath := filepath.Join(bm.nodeModulesPath, packageName)
+			scopeEntries, err := os.ReadDir(scopePath)
+			if err != nil {
+				continue
+			}
+
+			for _, scopeEntry := range scopeEntries {
+				if scopeEntry.IsDir() {
+					fullPackageName := packageName + "/" + scopeEntry.Name()
+					if err := bm.setupPackageBinaries(fullPackageName); err != nil {
+						// Continue on error
+					}
+				}
+			}
+		} else {
+			if err := bm.setupPackageBinaries(packageName); err != nil {
+				// Continue on error
+			}
+		}
+	}
+
+	return nil
+}
