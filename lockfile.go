@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -16,6 +17,7 @@ type LockFile struct {
 	Packages    map[string]LockPackage `yaml:"packages"`
 	Specifiers  map[string]string      `yaml:"specifiers"`
 	DevPackages map[string]string      `yaml:"devPackages,omitempty"`
+	mu          sync.RWMutex           `yaml:"-"` // Protects all map operations
 }
 
 type LockPackage struct {
@@ -64,6 +66,9 @@ func loadLockFile() (*LockFile, error) {
 }
 
 func (lf *LockFile) saveLockFile() error {
+	lf.mu.RLock()
+	defer lf.mu.RUnlock()
+	
 	lf.CreatedAt = time.Now()
 
 	data, err := yaml.Marshal(lf)
@@ -94,6 +99,9 @@ func (lf *LockFile) addPackage(name, version, specifier string, isDev bool) erro
 		DevDep:       isDev,
 	}
 
+	lf.mu.Lock()
+	defer lf.mu.Unlock()
+	
 	lf.Packages[packageKey] = lockPkg
 	lf.Specifiers[name] = specifier
 
@@ -106,11 +114,18 @@ func (lf *LockFile) addPackage(name, version, specifier string, isDev bool) erro
 
 func (lf *LockFile) hasPackage(name, version string) bool {
 	packageKey := fmt.Sprintf("%s@%s", name, version)
+	
+	lf.mu.RLock()
+	defer lf.mu.RUnlock()
+	
 	_, exists := lf.Packages[packageKey]
 	return exists
 }
 
 func (lf *LockFile) getPackageVersion(name string) string {
+	lf.mu.RLock()
+	defer lf.mu.RUnlock()
+	
 	for _, pkg := range lf.Packages {
 		if pkg.Name == name {
 			return pkg.Version
@@ -147,6 +162,9 @@ func getPackageDependencies(packageName string) (map[string]string, error) {
 }
 
 func (lf *LockFile) removePackage(name string) {
+	lf.mu.Lock()
+	defer lf.mu.Unlock()
+	
 	var keysToRemove []string
 
 	for key, pkg := range lf.Packages {
