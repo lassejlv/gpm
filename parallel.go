@@ -35,7 +35,7 @@ func NewParallelInstaller(pm *PackageManager, lockFile *LockFile, timer *Timer) 
 		pm:         pm,
 		lockFile:   lockFile,
 		timer:      timer,
-		maxWorkers: 4, // Adjust based on performance testing
+		maxWorkers: 4,
 	}
 }
 
@@ -48,30 +48,30 @@ func (pi *ParallelInstaller) InstallPackages(jobs []PackageJob, writeToPackageJS
 	jobChan := make(chan PackageJob, totalJobs)
 	resultChan := make(chan PackageResult, totalJobs)
 
-	// Start progress indicator
+
 	progressDone := make(chan bool)
 	go pi.showProgress(totalJobs, resultChan, progressDone)
 
-	// Start workers
+
 	var wg sync.WaitGroup
 	for i := 0; i < pi.maxWorkers; i++ {
 		wg.Add(1)
 		go pi.worker(jobChan, resultChan, &wg)
 	}
 
-	// Send jobs
+
 	for _, job := range jobs {
 		jobChan <- job
 	}
 	close(jobChan)
 
-	// Wait for all workers to finish
+
 	go func() {
 		wg.Wait()
 		close(resultChan)
 	}()
 
-	// Wait for progress to finish
+
 	<-progressDone
 
 	return nil
@@ -85,7 +85,6 @@ func (pi *ParallelInstaller) showProgress(total int, results <-chan PackageResul
 	cached := 0
 	downloaded := 0
 	var errors []error
-	var installedPackages []string
 
 	frames := []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
 	frameIndex := 0
@@ -97,7 +96,7 @@ func (pi *ParallelInstaller) showProgress(total int, results <-chan PackageResul
 		select {
 		case result, ok := <-results:
 			if !ok {
-				// All results processed
+
 				fmt.Print("\r                                                                \r")
 
 				if failed > 0 {
@@ -111,13 +110,13 @@ func (pi *ParallelInstaller) showProgress(total int, results <-chan PackageResul
 						color.HiGreenString("✓"), completed)
 				}
 
-				// Setup binaries for all packages in node_modules after installation
+
 				bm := NewBinaryManager()
 				if err := bm.setupAllBinaries(); err != nil {
 					fmt.Printf(" %s Failed to setup some binaries: %v\n", color.YellowString("⚠"), err)
 				}
 
-				// Show cache/download statistics
+
 				if completed > 0 {
 					fmt.Printf(" %s %d cached, %d downloaded\n",
 						color.MagentaString("→"),
@@ -137,14 +136,13 @@ func (pi *ParallelInstaller) showProgress(total int, results <-chan PackageResul
 				} else {
 					downloaded++
 				}
-				installedPackages = append(installedPackages, result.Job.Name)
 
-				// Add to lockfile
+
 				if err := pi.lockFile.addPackage(result.Job.Name, result.InstalledVersion, result.Job.OriginalSpec, result.Job.IsDev); err != nil {
-					// Silent fail for lockfile updates during parallel install
+
 				}
 
-				// Update package.json if needed (silent)
+
 				if result.Job.Name != "" {
 					updatePackageJSON(result.Job.Name, result.InstalledVersion, result.Job.IsDev)
 				}
@@ -165,13 +163,13 @@ func (pi *ParallelInstaller) worker(jobs <-chan PackageJob, results chan<- Packa
 	for job := range jobs {
 		result := PackageResult{Job: job}
 
-		// Parse version from job
+
 		version := "latest"
 		if job.Version != "" {
 			version = job.Version
 		}
 
-		// Check if already cached
+
 		existingVersion := pi.lockFile.getPackageVersion(job.Name)
 		if existingVersion != "" && isPackageInstalled(fmt.Sprintf("node_modules/%s", job.Name), existingVersion) {
 			result.InstalledVersion = existingVersion
@@ -180,12 +178,12 @@ func (pi *ParallelInstaller) worker(jobs <-chan PackageJob, results chan<- Packa
 			continue
 		}
 
-		// Pause timer during installation
+
 		if pi.timer != nil {
 			pi.timer.Pause()
 		}
 
-		// Install the package
+
 		installedVersion, wasCached, err := pi.pm.Install(job.Name, version)
 
 		if pi.timer != nil {
@@ -201,11 +199,10 @@ func (pi *ParallelInstaller) worker(jobs <-chan PackageJob, results chan<- Packa
 		result.InstalledVersion = installedVersion
 		result.FromCache = wasCached
 
-		// Install dependencies sequentially for this package
-		// (We don't want to over-parallelize and overwhelm the npm registry)
+
 		if !wasCached {
 			if err := pi.pm.InstallDependencies(job.Name, pi.lockFile); err != nil {
-				// Don't fail the main package install for dependency issues
+
 				fmt.Printf(" %s Warning: Failed to install dependencies for %s: %v\n", color.YellowString("⚠"), job.Name, err)
 			}
 		}

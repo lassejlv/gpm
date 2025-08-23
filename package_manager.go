@@ -48,7 +48,7 @@ func NewPackageManager() *PackageManager {
 }
 
 func (pm *PackageManager) Install(packageName, version string) (string, bool, error) {
-	// Ensure node_modules directory exists
+
 	if err := pm.ensureNodeModulesDir(); err != nil {
 		return "", false, fmt.Errorf("failed to create node_modules directory: %v", err)
 	}
@@ -115,7 +115,7 @@ func (pm *PackageManager) getPackageInfo(packageName, version string) (*PackageI
 		return nil, fmt.Errorf("failed to parse registry response: %v", err)
 	}
 
-	// Resolve version
+
 	if version == "latest" {
 		if latestVersion, ok := registryResp.DistTags["latest"]; ok {
 			version = latestVersion

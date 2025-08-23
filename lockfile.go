@@ -17,7 +17,7 @@ type LockFile struct {
 	Packages    map[string]LockPackage `yaml:"packages"`
 	Specifiers  map[string]string      `yaml:"specifiers"`
 	DevPackages map[string]string      `yaml:"devPackages,omitempty"`
-	mu          sync.RWMutex           `yaml:"-"` // Protects all map operations
+	mu          sync.RWMutex           `yaml:"-"`
 }
 
 type LockPackage struct {

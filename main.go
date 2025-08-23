@@ -80,7 +80,7 @@ func handleInstall() {
 		os.Exit(1)
 	}
 
-	// Use parallel installer for multiple packages
+
 	parallelInstaller := NewParallelInstaller(pm, lockFile, timer)
 	if err := parallelInstaller.InstallFromSpecs(packages, isDev, true); err != nil {
 		color.Red("Failed to install packages: %v", err)
@@ -138,7 +138,7 @@ func handleUpgrade() {
 	pm := NewPackageManager()
 	upgradeManager := NewUpgradeManager(pm, lockFile)
 
-	// Check for --all flag
+
 	skipTUI := false
 	var packagesToUpgrade []string
 
@@ -153,7 +153,7 @@ func handleUpgrade() {
 	}
 
 	if len(packagesToUpgrade) == 0 && !skipTUI {
-		// Upgrade all packages from package.json
+
 		data, err := os.ReadFile("package.json")
 		if err != nil {
 			color.Red("Failed to read package.json: %v", err)
@@ -179,7 +179,7 @@ func handleUpgrade() {
 		return
 	}
 
-	// Check what needs upgrading
+
 	upgrades, err := upgradeManager.CheckUpgrades(packagesToUpgrade)
 	if err != nil {
 		color.Red("Failed to check for upgrades: %v", err)
@@ -189,7 +189,7 @@ func handleUpgrade() {
 	var packagesNeedingUpgrade []string
 
 	if skipTUI {
-		// Skip TUI and upgrade all packages that need upgrading
+
 		for _, upgrade := range upgrades {
 			if upgrade.NeedsUpgrade {
 				packagesNeedingUpgrade = append(packagesNeedingUpgrade, upgrade.Name)
@@ -203,7 +203,7 @@ func handleUpgrade() {
 
 		fmt.Printf(" %s Upgrading %d package(s)...\n", color.YellowString("⬆"), len(packagesNeedingUpgrade))
 	} else {
-		// Use TUI to select packages to upgrade
+
 		tui := NewTUI()
 		selectedUpgrades, err := tui.SelectPackagesToUpgrade(upgrades)
 		if err != nil {
@@ -215,7 +215,7 @@ func handleUpgrade() {
 			return
 		}
 
-		// Extract package names from selected upgrades
+
 		for _, upgrade := range selectedUpgrades {
 			packagesNeedingUpgrade = append(packagesNeedingUpgrade, upgrade.Name)
 		}
@@ -224,7 +224,7 @@ func handleUpgrade() {
 	timer := NewTimer()
 	timer.Start()
 
-	// Use parallel installer for upgrades
+
 	parallelInstaller := NewParallelInstaller(pm, lockFile, timer)
 	if err := parallelInstaller.InstallFromSpecs(packagesNeedingUpgrade, false, true); err != nil {
 		color.Red("Failed to upgrade packages: %v", err)
@@ -377,7 +377,7 @@ func printUsage() {
 	fmt.Printf("  gpm upgrade --all            %s Upgrade all packages\n", color.BlueString("⬆"))
 	fmt.Printf("  gpm bin                      %s List available binaries\n", color.CyanString("🔧"))
 	fmt.Printf("  gpm cache info               %s Show cache info\n", color.CyanString("ℹ"))
-	fmt.Println("\nNote: Requires package.json in current directory\n")
+	fmt.Println("\nNote: Requires package.json in current directory")
 }
 
 func fileExists(filename string) bool {

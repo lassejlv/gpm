@@ -37,9 +37,8 @@ func (bm *BinaryManager) setupPackageBinaries(packageName string) error {
 	}
 
 	var pkg struct {
-		Name      string            `json:"name"`
-		Bin       map[string]string `json:"bin"`
-		BinString string            `json:"bin"`
+		Name string          `json:"name"`
+		Bin  json.RawMessage `json:"bin"`
 	}
 
 	if err := json.Unmarshal(data, &pkg); err != nil {
@@ -52,10 +51,18 @@ func (bm *BinaryManager) setupPackageBinaries(packageName string) error {
 
 	binaries := make(map[string]string)
 
-	if pkg.Bin != nil {
-		binaries = pkg.Bin
-	} else if pkg.BinString != "" {
-		binaries[packageName] = pkg.BinString
+	if len(pkg.Bin) > 0 {
+
+		var binMap map[string]string
+		if err := json.Unmarshal(pkg.Bin, &binMap); err == nil {
+			binaries = binMap
+		} else {
+
+			var binString string
+			if err := json.Unmarshal(pkg.Bin, &binString); err == nil {
+				binaries[packageName] = binString
+			}
+		}
 	}
 
 	for binName, binPath := range binaries {
@@ -185,9 +192,8 @@ func (bm *BinaryManager) removePackageBinaries(packageName string) error {
 	}
 
 	var pkg struct {
-		Name      string            `json:"name"`
-		Bin       map[string]string `json:"bin"`
-		BinString string            `json:"bin"`
+		Name string          `json:"name"`
+		Bin  json.RawMessage `json:"bin"`
 	}
 
 	if err := json.Unmarshal(data, &pkg); err != nil {
@@ -196,10 +202,18 @@ func (bm *BinaryManager) removePackageBinaries(packageName string) error {
 
 	binaries := make(map[string]string)
 
-	if pkg.Bin != nil {
-		binaries = pkg.Bin
-	} else if pkg.BinString != "" {
-		binaries[packageName] = pkg.BinString
+	if len(pkg.Bin) > 0 {
+
+		var binMap map[string]string
+		if err := json.Unmarshal(pkg.Bin, &binMap); err == nil {
+			binaries = binMap
+		} else {
+
+			var binString string
+			if err := json.Unmarshal(pkg.Bin, &binString); err == nil {
+				binaries[packageName] = binString
+			}
+		}
 	}
 
 	for binName := range binaries {
@@ -268,7 +282,6 @@ func (bm *BinaryManager) setupAllBinaries() error {
 			continue
 		}
 
-		// Handle scoped packages
 		if strings.HasPrefix(packageName, "@") {
 			scopePath := filepath.Join(bm.nodeModulesPath, packageName)
 			scopeEntries, err := os.ReadDir(scopePath)
@@ -280,7 +293,7 @@ func (bm *BinaryManager) setupAllBinaries() error {
 				if scopeEntry.IsDir() {
 					fullPackageName := packageName + "/" + scopeEntry.Name()
 					if err := bm.setupPackageBinaries(fullPackageName); err != nil {
-						// Continue on error
+
 					}
 				}
 			}

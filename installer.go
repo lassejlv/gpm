@@ -91,7 +91,6 @@ func installPackage(pm *PackageManager, packageSpec string, isDev bool, writeToP
 		color.HiBlackString(installedVersion),
 		color.GreenString("added"))
 
-	// Setup binaries for the package
 	bm := NewBinaryManager()
 	if err := bm.setupPackageBinaries(name); err != nil {
 		fmt.Printf(" %s Failed to setup binaries for %s: %v\n", color.YellowString("⚠"), name, err)
@@ -121,7 +120,6 @@ func installFromPackageJSON(pm *PackageManager, lockFile *LockFile) error {
 
 	var jobs []PackageJob
 
-	// Prepare regular dependencies
 	for name, version := range pkg.Dependencies {
 		packageSpec := name
 		if version != "" && version != "latest" {
@@ -145,7 +143,6 @@ func installFromPackageJSON(pm *PackageManager, lockFile *LockFile) error {
 		})
 	}
 
-	// Prepare dev dependencies
 	for name, version := range pkg.DevDependencies {
 		packageSpec := name
 		if version != "" && version != "latest" {
@@ -169,7 +166,6 @@ func installFromPackageJSON(pm *PackageManager, lockFile *LockFile) error {
 		})
 	}
 
-	// Install packages in parallel
 	parallelInstaller := NewParallelInstaller(pm, lockFile, timer)
 	if err := parallelInstaller.InstallPackages(jobs, false); err != nil {
 		return err
@@ -179,7 +175,6 @@ func installFromPackageJSON(pm *PackageManager, lockFile *LockFile) error {
 		fmt.Printf(" %s Failed to save lockfile: %v\n", color.YellowString("⚠"), err)
 	}
 
-	// Setup binaries for all packages after installation
 	bm := NewBinaryManager()
 	if err := bm.setupAllBinaries(); err != nil {
 		fmt.Printf(" %s Failed to setup some binaries: %v\n", color.YellowString("⚠"), err)
